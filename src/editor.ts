@@ -17,81 +17,9 @@ import {
 } from "rete-context-menu-plugin";
 import { Input, Output } from "rete/_types/presets/classic";
 
-type Node = NodeA | NodeB;
-type Schemes = GetSchemes<Node, Connection<Node, Node>>;
-type AreaExtra = ReactArea2D<Schemes> | ContextMenuExtra;
+import { Schemes, AreaExtra, NodeA, NodeB, NodeC, NodeASocket, NodeBSocket, NodeCSocket } from "./types";
+import { LabeledTextControl, LabeledText } from "./LabeledTextControl";
 
-export class NodeASocket extends ClassicPreset.Socket {
-  constructor() {
-    super("NodeASocket");
-  }
-
-  isCompatibleWith(socket: ClassicPreset.Socket) {
-    return socket instanceof NodeASocket;
-  }
-}
-
-export class NodeBSocket extends ClassicPreset.Socket {
-  constructor() {
-    super("NodeBSocket");
-  }
-
-  isCompatibleWith(socket: any) {
-    return socket instanceof NodeBSocket;
-  }
-}
-
-export class NodeCSocket extends ClassicPreset.Socket {
-  constructor() {
-    super("NodeCSocket");
-  }
-
-  isCompatibleWith(socket: ClassicPreset.Socket) {
-    return socket instanceof NodeCSocket;
-  }
-}
-
-class NodeA extends ClassicPreset.Node {
-  height = 140;
-  width = 200;
-
-  constructor(socket: NodeBSocket) {
-    super("NodeA");
-
-    this.addControl("a", new ClassicPreset.InputControl("text", {}));
-    this.addOutput("a", new ClassicPreset.Output(socket));
-  }
-}
-
-class NodeB extends ClassicPreset.Node {
-  height = 140;
-  width = 200;
-
-  constructor(inSocket: NodeBSocket, outSocket: NodeCSocket) {
-    super("NodeB");
-
-    this.addControl("b", new ClassicPreset.InputControl("text", {}));
-    this.addInput("b", new ClassicPreset.Input(inSocket));
-    this.addOutput("c", new ClassicPreset.Output(outSocket));
-  }
-}
-
-class NodeC extends ClassicPreset.Node {
-  height = 140;
-  width = 200;
-
-  constructor(inSocket: NodeBSocket) {
-    super("NodeC");
-
-    this.addControl("b", new ClassicPreset.InputControl("text", {}));
-    this.addInput("b", new ClassicPreset.Input(inSocket));
-  }
-}
-
-class Connection<
-  A extends Node,
-  B extends Node
-> extends ClassicPreset.Connection<A, B> {}
 
 export function getConnectionSockets(
   editor: NodeEditor<Schemes>,
@@ -125,6 +53,9 @@ export async function createEditor(container: HTMLElement) {
   const bSocket = new NodeBSocket();
   const cSocket = new NodeCSocket();
 
+  // const cNode = new NodeC(cSocket);
+  // cNode.label = "test";
+
   const editor = new NodeEditor<Schemes>();
   const area = new AreaPlugin<Schemes, AreaExtra>(container);
   const connection = new ConnectionPlugin<Schemes, AreaExtra>();
@@ -134,15 +65,53 @@ export async function createEditor(container: HTMLElement) {
     items: ContextMenuPresets.classic.setup([
       ["NodeA", () => new NodeA(bSocket)],
       ["Extra", [
-        
     ["NodeB", () => new NodeB(bSocket, cSocket)],
     ["NodeC", () => new NodeC(cSocket)]
-    
     ]],
     ]),
   });
 
+
+  class ButtonControl extends ClassicPreset.Control {
+    constructor(public label: string, public onClick: () => void) {
+      super();
+    }
+  }
+  
+  class ProgressControl extends ClassicPreset.Control {
+    constructor(public percent: number) {
+      super();
+    }
+  }
+  
   area.use(contextMenu);
+
+  const contextMenu2 = new ContextMenuPlugin<Schemes>({
+    items(context, plugin) {
+      if (context === 'root') {
+        return {
+          searchBar: false,
+          list: [
+            { label: 'Log Custom', key: '1', handler: () => console.log('Custom') },
+            {
+              label: 'Collection', key: '11', handler: () => null,
+              subitems: [
+                { label: 'Log Subitem', key: '12', handler: () => alert('Subitem') },
+                { label: 'Log Connections', key: '13', handler: () => console.log(editor.getConnections()) }
+              ]
+            }
+          ]
+        }
+      }
+      return {
+        searchBar: false,
+        list: [
+        ]
+      }
+    }
+  });
+
+  area.use(contextMenu2)
 
   AreaExtensions.selectableNodes(area, AreaExtensions.selector(), {
     accumulating: AreaExtensions.accumulateOnCtrl(),
@@ -150,6 +119,18 @@ export async function createEditor(container: HTMLElement) {
 
   render.addPreset(Presets.contextMenu.setup());
   render.addPreset(Presets.classic.setup());
+  render.addPreset(
+    Presets.classic.setup({
+      customize: {
+        control(data) {
+          if (data.payload instanceof LabeledTextControl) {
+            return LabeledText;
+          }
+          return null;
+        }
+      }
+    })
+  );
 
   connection.addPreset(ConnectionPresets.classic.setup());
 
