@@ -29,22 +29,35 @@ export function getConnectionSockets(
   const target = editor.getNode(connection.target);
 
   const output =
-      source &&
-      (source.outputs as Record<string, Input<ClassicPreset.Socket>>)[connection.sourceOutput];
+    source &&
+    (source.outputs as Record<string, Input<ClassicPreset.Socket>>)[connection.sourceOutput];
   const input =
-      target && (target.inputs as unknown as Record<string, Output<ClassicPreset.Socket>>)[connection.targetInput];
+    target && (target.inputs as unknown as Record<string, Output<ClassicPreset.Socket>>)[connection.targetInput];
 
   return {
-      source: output?.socket,
-      target: input?.socket
+    source: output?.socket,
+    target: input?.socket
   };
 }
 
 export function canCreateConnection(editor: NodeEditor<Schemes>, connection: Schemes["Connection"]) {
   const { source, target } = getConnectionSockets(editor, connection);
 
-    return source && target && (source as any).isCompatibleWith(target);
+  return true;
 
+  //return source && target && (source as any).isCompatibleWith(target);
+
+}
+
+const handleSaveFile = async (fileContents: string) => {
+  try {
+    const fileHandle = await window.showSaveFilePicker();
+    const writable = await fileHandle.createWritable();
+    await writable.write(fileContents);
+    await writable.close();
+  } catch (error) {
+    console.error("Error saving file: ", error);
+  }
 }
 
 export async function createEditor(container: HTMLElement) {
@@ -65,9 +78,9 @@ export async function createEditor(container: HTMLElement) {
     items: ContextMenuPresets.classic.setup([
       ["NodeA", () => new NodeA(bSocket)],
       ["Extra", [
-    ["NodeB", () => new NodeB(bSocket, cSocket)],
-    ["NodeC", () => new NodeC(cSocket)]
-    ]],
+        ["NodeB", () => new NodeB(bSocket, cSocket)],
+        ["NodeC", () => new NodeC(cSocket)]
+      ]],
     ]),
   });
 
@@ -77,13 +90,13 @@ export async function createEditor(container: HTMLElement) {
       super();
     }
   }
-  
+
   class ProgressControl extends ClassicPreset.Control {
     constructor(public percent: number) {
       super();
     }
   }
-  
+
   area.use(contextMenu);
 
   const contextMenu2 = new ContextMenuPlugin<Schemes>({
@@ -96,6 +109,9 @@ export async function createEditor(container: HTMLElement) {
             {
               label: 'Collection', key: '11', handler: () => null,
               subitems: [
+                { label: 'Export Graph', key: '2', handler: () => handleSaveFile(exportGraph(editor)) },
+                { label: 'Import Graph', key: '3', handler: () => importGraph(editor, arrange, area) },
+
                 { label: 'Log Subitem', key: '12', handler: () => alert('Subitem') },
                 { label: 'Log Connections', key: '13', handler: () => console.log(editor.getConnections()) }
               ]
@@ -126,6 +142,9 @@ export async function createEditor(container: HTMLElement) {
           if (data.payload instanceof LabeledTextControl) {
             return LabeledText;
           }
+          if (data.payload instanceof ClassicPreset.InputControl) {
+            return Presets.classic.Control;
+          }
           return null;
         }
       }
@@ -155,10 +174,16 @@ export async function createEditor(container: HTMLElement) {
   AreaExtensions.simpleNodesOrder(area);
 
   // const a = new NodeA(bSocket);
-  // const b = new NodeB(bSocket, cSocket);
+  const b = new NodeB(bSocket, cSocket);
+  const inputControl = new ClassicPreset.InputControl("number", {
+    initial: 0,
 
+  });
+
+  b.addControl("input", inputControl);
   // await editor.addNode(a);
-  // await editor.addNode(b);
+  
+  await editor.addNode(b);
 
   // await editor.addConnection(new ClassicPreset.Connection(a, "a", b, "b"));
 
@@ -168,4 +193,49 @@ export async function createEditor(container: HTMLElement) {
   return {
     destroy: () => area.destroy(),
   };
+}
+
+async function importGraph(
+  editor: NodeEditor<Schemes>, 
+  arrange: AutoArrangePlugin<Schemes>, 
+  area: AreaPlugin<Schemes, AreaExtra>
+) {
+
+  try {
+    const [fileHandle] = await window.showOpenFilePicker();
+    const file = await fileHandle.getFile();
+    const fileStream = file.stream();
+    const reader = fileStream.getReader();
+    let data = "";
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) {
+        break;
+      }
+      data += new TextDecoder().decode(value);  
+    }
+
+
+    var e = JSON.parse(data);
+    for (const node of e.nodes) {
+      var addNode;
+      addNode = new NodeB(new NodeBSocket(), new NodeCSocket()); 
+      await editor.addNode(addNode);
+      await arrange.layout();
+    }
+    for (const connection of e.connections) {
+      console.log("adding connection: ", connection);
+      await editor.addConnection(connection);
+      await arrange.layout();
+    }
+    await arrange.layout();
+    await AreaExtensions.zoomAt(area, editor.getNodes());
+  } catch (error) {
+    console.error("Error loading file: ", error);
+  }
+
+}
+
+function exportGraph(editor: NodeEditor<Schemes>): string {
+  return JSON.stringify(editor);
 }

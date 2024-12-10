@@ -18,10 +18,10 @@ export function LabeledText(props: { data: LabeledTextControl }) {
 
     return (
         <div>
-            <label htmlFor="{props.data.id}">{props.data.label}</label>
-            <Input type="text"
+            <Input 
+                type="text"
                 onChange={e => setValue(e.target.value)}
-            />
+                children={null}></Input>
         </div>
     );
 }
